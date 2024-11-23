@@ -1,6 +1,6 @@
 require('dotenv').config();
-const dns = require('node:dns')
-
+const dns = require('node:dns');
+const URL = require('url').URL;
 const express = require('express');
 const cors = require('cors');
 const app = express();
@@ -29,19 +29,28 @@ app.get('/api/hello', function(req, res) {
   res.json({ greeting: 'hello API' });
 });
 
-app.post('/api/shorturl', function(req, res){
+app.post('/api/shorturl/', function(req, res){
+  let hostName;
   const output = {
     original_url : '',
     short_url : ''
   }  
   console.log("Response: ", req.body.url)
-  output.original_url = req.body.url.replace('https://', '');
-  const hostName = getHost(output.original_url);
+  output.original_url =(req.body.url);
+  
+  try {
+    hostName = new URL(output.original_url);
+  } catch (e) {
+    console.log(e);
+    return res.json({ error: 'Invalid URL' })
+  }
+  
+  hostName = hostName.host;
   //check if its a valid url
-  console.log(hostName)
+  console.log("Hostname: ", hostName)
   dns.lookup(hostName, 4, function(errorMsg, addr, family) {
     if ((errorMsg != null) && (errorMsg.code === 'ENOTFOUND')){
-      res.json({ error: 'invalid url' })
+      res.json({ error: 'Invalid URL' })
     } else {
       output.short_url = urlShortHash(output.original_url);
       data[`${output.short_url}`] = output.original_url;
@@ -57,9 +66,10 @@ app.get('/api/shorturl/:short_url', (req, res) => {
   let short_url = req.params.short_url;
   console.log("entering the page...")
   if (data.hasOwnProperty(short_url)){
-    res.redirect('https://'+data[short_url]);
+    console.log(data[short_url])
+    res.redirect(data[short_url]);
   } else {
-    res.json({ error: 'invalid url' });
+    res.json({ error: 'Wrong format' });
   }
 })
 
@@ -68,16 +78,6 @@ app.listen(port, function() {
   console.log(`Listening on port ${port}`);
 });
 
-function getHost(url) {
-  let hostName = '';
-  for (let i=0; i<url.length; i++){
-    //console.log(url[i]);
-    if (url[i] == '/') {break;}
-    hostName += url[i];
-  }
-
-  return hostName;
-}
 
 function urlShortHash(url) {
   let hash = 0;
