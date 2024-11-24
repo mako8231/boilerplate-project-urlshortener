@@ -16,6 +16,8 @@ const port = process.env.PORT || 3000;
 app.use(express.urlencoded({
   extended: true
 }));
+
+app.use(cors());
 app.use(express.json());
 
 app.use('/public', express.static(`${process.cwd()}/public`));
@@ -28,6 +30,10 @@ app.get('/', function(req, res) {
 app.get('/api/hello', function(req, res) {
   res.json({ greeting: 'hello API' });
 });
+
+app.get('/api/shorturl/', function(req, res){
+  return res.status(404).send("Not Found")
+})
 
 app.post('/api/shorturl/', function(req, res){
   let hostName;
@@ -42,22 +48,26 @@ app.post('/api/shorturl/', function(req, res){
     hostName = new URL(output.original_url);
   } catch (e) {
     console.log(e);
-    return res.json({ error: 'Invalid URL' })
+    return res.status(200).json({ error: 'invalid url' })
   }
   
+  if (hostName.protocol != 'https:') {
+    return res.status(200).json({ error: 'invalid url' })
+  }
+
   hostName = hostName.host;
   //check if its a valid url
   console.log("Hostname: ", hostName)
   dns.lookup(hostName, 4, function(errorMsg, addr, family) {
     if ((errorMsg != null) && (errorMsg.code === 'ENOTFOUND')){
-      res.json({ error: 'Invalid URL' })
+      res.json({ error: 'Invalid Hostname' })
     } else {
-      output.short_url = urlShortHash(output.original_url);
+      output.short_url = urlShortValue(output.original_url);
       data[`${output.short_url}`] = output.original_url;
       
       //Save json
       fs.writeFileSync('./shortenedURLs.json', JSON.stringify(data), 'utf8');
-      res.json(output)
+      res.status(200).json(output)
     }
   });
 })
@@ -69,7 +79,7 @@ app.get('/api/shorturl/:short_url', (req, res) => {
     console.log(data[short_url])
     res.redirect(data[short_url]);
   } else {
-    res.json({ error: 'Wrong format' });
+    res.status(200).json({ error: 'Wrong format' });
   }
 })
 
@@ -79,12 +89,32 @@ app.listen(port, function() {
 });
 
 
-function urlShortHash(url) {
-  let hash = 0;
-  for (let i=0; i<url.length; i++){
-    let charCode = url.charCodeAt(i);
-    hash += charCode;
-  }
+function urlShortValue(url) {
+  let keySize = 0;
+  let index = null;
+  //check if this exists beforehand
+  index = getKeyByValue(data, url);
   
-  return (hash%2000);
+  if (index) {
+    return index;
+  }
+
+  //else if its a new entry
+  keySize = Object.keys(data).length;
+  return keySize + 1; 
+}
+
+function getKeyByValue(dataObj, value){
+  let keys = Object.keys(dataObj);
+  let foundKey = null;
+  if (keys.length > 0) {
+    for (let i = 0; i<keys.length; i++){
+      if (dataObj[keys[i]] === value) {
+        foundKey = keys[i];
+        break;
+      }
+    }
+    return foundKey;
+  }
+  return null;
 }
